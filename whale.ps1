@@ -1,4 +1,4 @@
-# DSH whale balance desktop widget - native WPF, standalone (no DSH, no Chromium)
+﻿# DSH whale balance desktop widget - native WPF, standalone (no DSH, no Chromium)
 param([switch]$Test, [switch]$Render, [string]$Out)
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms
