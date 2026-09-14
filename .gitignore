@@ -1,0 +1,16 @@
+# 个人配置（含 API Key，绝不能提交）
+config.json
+
+# 运行时生成
+run.log
+.dshw-size.json
+.dshw-usage.json
+.dshw-pos.json
+
+# 调试产物
+render*.png
+menu.png
+*.traineddata
+
+# 依赖
+node_modules/
