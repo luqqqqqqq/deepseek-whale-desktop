@@ -24,7 +24,7 @@ git clone https://github.com/luqqqqqqq/deepseek-whale-desktop.git
 cd deepseek-whale-desktop
 ```
 
-> ⚠️ 两种方式下载后都**不会带 API Key**（出于安全考虑 `config.json` 已被 `.gitignore` 排除），必须自己创建并填写。
+> ⚠️ 两种方式下载后都**不会带 API Key**必须自己创建并填写。
 
 ## 特性
 
