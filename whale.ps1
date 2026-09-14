@@ -1,4 +1,4 @@
-﻿# DSH whale balance desktop widget - native WPF, standalone (no DSH, no Chromium)
+# DSH whale balance desktop widget - native WPF, standalone (no DSH, no Chromium)
 param([switch]$Test, [switch]$Render, [string]$Out)
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms
@@ -20,7 +20,12 @@ function Write-Log([string]$m) {
 }
 
 $script:ApiKey = ''
-try { $script:ApiKey = (Get-Content $ConfigPath -Raw | ConvertFrom-Json).DEEPSEEK_API_KEY } catch {}
+$script:PlatformToken = ''
+try {
+  $cfgJson = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+  $script:ApiKey = $cfgJson.DEEPSEEK_API_KEY
+  $script:PlatformToken = $cfgJson.DEEPSEEK_PLATFORM_TOKEN
+} catch {}
 
 $script:State = [ordered]@{
   totalBalance = $null
@@ -113,6 +118,60 @@ function Is-PeakTime([datetime]$t) {
   return (($h -ge 9 -and $h -lt 12) -or ($h -ge 14 -and $h -lt 18))
 }
 
+# ---- 「实时·令牌」模式：平台用量接口 + 峰谷定价换算 ----
+# DeepSeek CNY 价格（元/百万 token）：[空闲价, 高峰价]。官方调价时改这里。
+$script:Pricing = @{
+  'deepseek-v4-flash-vision-exp' = @{ hit = @(0.05, 0.1);  miss = @(1.5, 3.0);  out = @(4.5, 9.0) }
+  'deepseek-v4-flash'            = @{ hit = @(0.05, 0.1);  miss = @(1.5, 3.0);  out = @(4.5, 9.0) }
+  'deepseek-v4-pro'              = @{ hit = @(0.15, 0.3);  miss = @(4.5, 9.0);  out = @(13.5, 27.0) }
+  'deepseek-chat'                = @{ hit = @(0.05, 0.1);  miss = @(1.5, 3.0);  out = @(4.5, 9.0) }
+  'deepseek-reasoner'            = @{ hit = @(0.05, 0.1);  miss = @(1.5, 3.0);  out = @(4.5, 9.0) }
+}
+function Get-Price([string]$model) {
+  $m = ([string]$model).ToLower()
+  foreach ($k in $script:Pricing.Keys) { if ($m.IndexOf($k) -ge 0) { return $script:Pricing[$k] } }
+  return $script:Pricing['deepseek-chat']
+}
+# 北京时间 2026-08-23 00:00 之后，周末全天按谷价
+$script:WeekendValleyFromSec = [long]((([datetime]::new(2026, 8, 22, 16, 0, 0, [DateTimeKind]::Utc)) - ([datetime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc))).TotalSeconds)
+function Test-PeakSec([long]$sec) {
+  if ($sec -le 0) { return $false }
+  $bj = [datetime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc).AddSeconds($sec + 8 * 3600)
+  if ($sec -ge $script:WeekendValleyFromSec) {
+    if ($bj.DayOfWeek -eq [System.DayOfWeek]::Saturday -or $bj.DayOfWeek -eq [System.DayOfWeek]::Sunday) { return $false }
+  }
+  $h = $bj.Hour
+  return (($h -ge 9 -and $h -lt 12) -or ($h -ge 14 -and $h -lt 18))
+}
+function Convert-Usage([string]$text) {
+  # 平台接口结构：data.biz_data.series[] = { model, buckets[{ time, usage{ PROMPT_CACHE_HIT_TOKEN / PROMPT_CACHE_MISS_TOKEN / RESPONSE_TOKEN } }] }
+  try { $j = $text | ConvertFrom-Json } catch { return $null }
+  $d = $j
+  if ($j.data -and $j.data.biz_data -and $j.data.biz_data.series) { $d = $j.data.biz_data }
+  elseif ($j.data -and $j.data.series) { $d = $j.data }
+  $series = @($d.series)
+  if ($series.Count -eq 0) { return $null }
+  $cost = 0.0; $tokens = 0.0; $found = $false
+  foreach ($s in $series) {
+    if (-not $s) { continue }
+    $p = Get-Price $s.model
+    foreach ($b in @($s.buckets)) {
+      $u = $b.usage
+      if (-not $u) { continue }
+      $hit = [double]$u.PROMPT_CACHE_HIT_TOKEN
+      $miss = [double]$u.PROMPT_CACHE_MISS_TOKEN
+      $out = [double]$u.RESPONSE_TOKEN
+      if (($hit + $miss + $out) -eq 0) { continue }
+      $found = $true
+      $tokens += $hit + $miss + $out
+      $pi = if (Test-PeakSec ([long]$b.time)) { 1 } else { 0 }
+      $cost += ($hit / 1e6) * $p.hit[$pi] + ($miss / 1e6) * $p.miss[$pi] + ($out / 1e6) * $p.out[$pi]
+    }
+  }
+  if (-not $found) { return $null }
+  return @{ amount = $cost; tokens = $tokens }
+}
+
 function Parse-Balance([string]$text) {
   try { $j = $text | ConvertFrom-Json } catch { return @{ ok = $false; error = '余额接口返回不是合法 JSON' } }
   $infos = @($j.balance_infos)
@@ -180,7 +239,7 @@ function Start-BalanceFetch([bool]$showBubble) {
   $script:fetchBusy = $true
   $script:bubbleAfterFetch = $showBubble
   $sb = {
-    param($key, $node, $helper, $cfg)
+    param($key, $node, $helper, $cfg, $ptoken, $wantUsage, $uhelper)
     $raw = ''
     try {
       $r = Invoke-WebRequest -Uri 'https://api.deepseek.com/user/balance' -Headers @{ Authorization = ('Bearer ' + $key) } -TimeoutSec 20 -UseBasicParsing
@@ -192,12 +251,31 @@ function Start-BalanceFetch([bool]$showBubble) {
     if (-not $raw -and $node -and (Test-Path $node) -and (Test-Path $helper)) {
       try { $t = & $node $helper $cfg 2>$null; if ($t) { $raw = ($t -join '') } } catch {}
     }
-    return $raw
+    $usage = ''
+    if ($wantUsage -and $ptoken) {
+      $now = Get-Date
+      $tz = [int]([System.TimeZoneInfo]::Local.GetUtcOffset($now).TotalSeconds)
+      $start = [long]((([datetime]::new($now.Year, $now.Month, $now.Day, 0, 0, 0, [DateTimeKind]::Local)).ToUniversalTime() - ([datetime]::new(1970, 1, 1, 0, 0, 0, [DateTimeKind]::Utc))).TotalSeconds)
+      $end = $start + 86400
+      $url = 'https://platform.deepseek.com/api/v0/usage/by_api_key/amount?start=' + $start + '&end=' + $end + '&tz=' + $tz
+      try {
+        $r2 = Invoke-WebRequest -Uri $url -Headers @{ Authorization = ('Bearer ' + $ptoken) } -TimeoutSec 15 -UseBasicParsing
+        if ($r2.Content) { $usage = [string]$r2.Content }
+      } catch {}
+      if (-not $usage) {
+        try { $t = & curl.exe -s -H ('Authorization: Bearer ' + $ptoken) $url 2>$null; if ($t) { $usage = ($t -join '') } } catch {}
+      }
+      if (-not $usage -and $node -and $uhelper -and (Test-Path $node) -and (Test-Path $uhelper)) {
+        try { $t = & $node $uhelper $cfg 2>$null; if ($t) { $usage = ($t -join '') } } catch {}
+      }
+    }
+    return (@{ balance = $raw; usage = $usage } | ConvertTo-Json -Compress)
   }
   try {
     $script:fetchPS = [powershell]::Create()
     $script:fetchPS.Runspace = $script:fetchRs
-    [void]$script:fetchPS.AddScript($sb).AddArgument($script:ApiKey).AddArgument((Find-Node)).AddArgument((Join-Path $AppDir 'getbalance.js')).AddArgument($ConfigPath)
+    $wantUsage = ([string]$script:State.usageMode -eq 'token') -and (-not [string]::IsNullOrWhiteSpace([string]$script:PlatformToken))
+    [void]$script:fetchPS.AddScript($sb).AddArgument($script:ApiKey).AddArgument((Find-Node)).AddArgument((Join-Path $AppDir 'getbalance.js')).AddArgument($ConfigPath).AddArgument([string]$script:PlatformToken).AddArgument($wantUsage).AddArgument((Join-Path $AppDir 'getusage.js'))
     $script:fetchHandle = $script:fetchPS.BeginInvoke()
     Write-Log 'fetch-started'
   } catch {
@@ -755,7 +833,7 @@ $volSlider.Add_ValueChanged({
 $usageCombo.Add_SelectionChanged({
   if ($script:suppress) { return }
   $tag = [string]$usageCombo.SelectedItem.Tag
-  if ($tag) { $script:State.usageMode = $tag; Write-SizeConfig }
+  if ($tag) { $script:State.usageMode = $tag; Write-SizeConfig; Start-BalanceFetch $true }
 })
 $peakCombo.Add_SelectionChanged({
   if ($script:suppress) { return }
@@ -806,9 +884,17 @@ $script:fetchTimer.Add_Tick({
   if (-not $script:fetchBusy -or -not $script:fetchHandle) { return }
   if (-not $script:fetchHandle.IsCompleted) { return }
   $raw = ''
+  $rawUsage = ''
   try {
     $out = $script:fetchPS.EndInvoke($script:fetchHandle)
-    if ($out -and $out.Count -gt 0) { $raw = [string]$out[$out.Count - 1] }
+    if ($out -and $out.Count -gt 0) {
+      $envelope = [string]$out[$out.Count - 1]
+      try {
+        $pe = $envelope | ConvertFrom-Json
+        if ($null -ne $pe.balance) { $raw = [string]$pe.balance; $rawUsage = [string]$pe.usage }
+        else { $raw = $envelope }
+      } catch { $raw = $envelope }
+    }
   } catch { Write-Log ('fetch-end-error: ' + $_.Exception.Message) }
   try { $script:fetchPS.Dispose() } catch {}
   $script:fetchPS = $null
@@ -824,6 +910,16 @@ $script:fetchTimer.Add_Tick({
       $script:State.isPeak = Is-PeakTime (Get-Date)
       $script:State.error = $null
       Write-Log ('balance=' + $script:State.totalBalance)
+      # 「实时·令牌」模式：用平台用量接口换算（失败则保留记账值）
+      if (([string]$script:State.usageMode -eq 'token') -and $rawUsage) {
+        $u = Convert-Usage $rawUsage
+        if ($u) {
+          $script:State.todayUsage = [double]$u.amount
+          Write-Log ('usage-token=' + $script:State.todayUsage + ' tokens=' + $u.tokens)
+        } else {
+          Write-Log 'usage-token-failed(回落记账)'
+        }
+      }
     } else {
       $script:State.error = $r.error
       Write-Log ('balance-parse-error: ' + $r.error)
