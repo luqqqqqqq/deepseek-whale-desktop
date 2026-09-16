@@ -6,6 +6,12 @@ run.log
 .dshw-size.json
 .dshw-usage.json
 .dshw-pos.json
+.dshw-codex.json
+custom-lines.txt
+.dshw-turns.json
+whale-roles/
+whale-audio/
+whale-bubble-imgs/
 
 # 调试产物
 render*.png
