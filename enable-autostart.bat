@@ -1,4 +1,2 @@
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0enable-autostart.ps1"
-echo.
-pause
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0autostart.ps1" -Enable

@@ -1,22 +1,16 @@
-# 个人配置（含 API Key，绝不能提交）
-config.json
+# 运行数据 / 凭据（含明文 API Key，禁止提交、上传、分享）
+.dshw-data/
+credentials.json
 
-# 运行时生成
-run.log
-.dshw-size.json
-.dshw-usage.json
-.dshw-pos.json
-.dshw-codex.json
-custom-lines.txt
-.dshw-turns.json
-whale-roles/
-whale-audio/
-whale-bubble-imgs/
+# WebView2 运行时缓存
+host.exe.WebView2/
+wv2-profile/
 
-# 调试产物
-render*.png
-menu.png
-*.traineddata
+# 日志
+*.log
 
-# 依赖
-node_modules/
+# 下载的 WebView2 SDK 包 / 完整 SDK（体积大，仅重新编译时才需要）
+*.zip
+*.nupkg
+webview2-sdk/
+wv2-sdk/
