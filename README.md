@@ -87,6 +87,8 @@ DeepSeek Whale Desktop wraps the upstream whale widget in a standalone Windows w
 
 感谢 [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 及其贡献者提供挂件源码和资源。桌面宿主使用 Microsoft WPF 与 WebView2。
 
+本仓库的 README、文档与目录结构采用作者的 `github-repo-template` 统一模板，通过 Codex 技能维护。
+
 ## 许可证
 
 本仓库尚未为新增的桌面宿主和启动脚本声明顶层许可证。
