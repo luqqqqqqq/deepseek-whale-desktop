@@ -9,6 +9,9 @@ wv2-profile/
 # 日志
 *.log
 
+# 本地编译结果
+/build/
+
 # 下载的 WebView2 SDK 包 / 完整 SDK（体积大，仅重新编译时才需要）
 *.zip
 *.nupkg

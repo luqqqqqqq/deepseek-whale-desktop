@@ -3,8 +3,8 @@ param([string]$Url = 'http://127.0.0.1:9876/')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing
 
-$dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$wvDir = Join-Path $dir 'webview2'
+$dir = Split-Path -Parent $PSScriptRoot
+$wvDir = Join-Path $dir 'tools\webview2'
 $env:PATH = $wvDir + ';' + $env:PATH
 Add-Type -Path (Join-Path $wvDir 'Microsoft.Web.WebView2.Core.dll')
 Add-Type -Path (Join-Path $wvDir 'Microsoft.Web.WebView2.WinForms.dll')

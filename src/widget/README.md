@@ -1,6 +1,6 @@
 # DSH 小鲸鱼记账挂件（DeepSeek Balance Whale Widget）
 
-> 本目录保留 [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的插件源码与原始说明，内置插件版本为 0.3.1。下文的 DSH 安装流程、会话事件能力与许可声明针对上游插件；本仓库桌面版的启动方式、数据目录及限制请以[项目首页](../README.md)和[桌面版说明](../docs/desktop-guide.md)为准。
+> 本目录保留 [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的插件源码与原始说明，内置插件版本为 0.3.1。下文的 DSH 安装流程、会话事件能力与许可声明针对上游插件；本仓库桌面版的启动方式、数据目录及限制请以[项目首页](../../README.md)和[文档导航](../../docs/README.md)为准。
 
 ![DSH 小鲸鱼记账挂件](assets/DSH2.png)
 

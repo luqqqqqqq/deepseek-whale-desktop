@@ -1,2 +1,2 @@
 @echo off
-wscript.exe "%~dp0start-widget.vbs"
+wscript.exe "%~dp0scripts\start-widget.vbs"

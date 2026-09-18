@@ -5,8 +5,9 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const SRC = path.join(HERE, 'source')
-const DATA_DIR = process.env.DSH_HOME || path.join(HERE, '.dshw-data')
+const ROOT = path.dirname(HERE)
+const SRC = path.join(HERE, 'widget')
+const DATA_DIR = process.env.DSH_HOME || path.join(ROOT, '.dshw-data')
 fs.mkdirSync(DATA_DIR, { recursive: true })
 process.env.DSH_HOME = DATA_DIR
 

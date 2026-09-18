@@ -1,7 +1,8 @@
 ﻿# V2 启动器：起本地 Node 服务 → 起透明鲸鱼 host.exe → 退出时停服务
 param([switch]$Stop)
 $ErrorActionPreference = 'Stop'
-$dir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$dir = Split-Path -Parent $PSScriptRoot
+$hostDir = Join-Path $dir 'releases\v2.0.0'
 $port = 9876
 $url = "http://127.0.0.1:$port/"
 
@@ -21,7 +22,7 @@ if ($Stop) {
 
 $node = Find-Node
 if (-not $node) { '[错误] 找不到 node.exe，请先装 Node.js' | Out-File (Join-Path $dir 'launch.err.log'); exit 1 }
-if (-not (Test-Path (Join-Path $dir 'host.exe'))) { '[错误] 找不到 host.exe，请先运行 build-host.ps1' | Out-File (Join-Path $dir 'launch.err.log'); exit 1 }
+if (-not (Test-Path (Join-Path $hostDir 'host.exe'))) { '[错误] 找不到 releases\v2.0.0\host.exe，请按开发文档恢复或重新构建宿主' | Out-File (Join-Path $dir 'launch.err.log'); exit 1 }
 
 # 先释放可能被残留进程占用的端口
 try {
@@ -35,7 +36,8 @@ Start-Sleep -Milliseconds 500
 Write-Host '[1/3] 启动本地服务…'
 $log = Join-Path $dir 'server.log'
 $errlog = Join-Path $dir 'server.err.log'
-$server = Start-Process $node -ArgumentList (Join-Path $dir 'start.mjs') -WorkingDirectory $dir -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errlog
+$serverScript = Join-Path $dir 'src\start.mjs'
+$server = Start-Process $node -ArgumentList ('"' + $serverScript + '"') -WorkingDirectory $dir -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errlog
 
 $ok = $false
 for ($i = 0; $i -lt 20; $i++) {
@@ -49,7 +51,7 @@ if (-not $ok) {
 }
 
 Write-Host '[2/3] 启动透明鲸鱼窗口…'
-$hostProc = Start-Process (Join-Path $dir 'host.exe') -WorkingDirectory $dir -PassThru
-Write-Host '[3/3] 已启动。关闭鲸鱼（托盘右键→退出）后自动停服务。'
+$hostProc = Start-Process (Join-Path $hostDir 'host.exe') -WorkingDirectory $hostDir -PassThru
+Write-Host '[3/3] 已启动。鲸鱼窗口获得焦点后按 Esc 关闭，随后自动停服务。'
 $hostProc.WaitForExit()
 Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
